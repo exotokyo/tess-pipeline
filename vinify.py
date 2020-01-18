@@ -1,35 +1,29 @@
 #-*-coding:utf-8-*-
 import os
-import glob
-import numpy as np
-from scipy import stats, signal
-from scipy.signal import medfilt
-from itertools import product
-from joblib import Parallel, delayed
-from tqdm import tqdm
 import cv2
 import h5py
-from astropy.io import fits
+import glob
+import argparse
+import numpy as np
+from tqdm import tqdm
+from itertools import product
+from scipy import stats, signal
+from scipy.signal import medfilt
+from joblib import Parallel, delayed
 
 from modules.io import glob_h5, get_workdir
 from modules.aperture import determin_aperture
 
-p_work = {
-    "data_type" : "CTL",
-       "sector" : [17],
-       "camera" : [1, 2, 3, 4],
-         "chip" : [1, 2, 3, 4],
-         "jobs" : 30,
-}
 
 def load_data(f):
     time = np.array(f["TPF"]["TIME"])
     flux = np.array(f["TPF"]["ROW_CNTS"])
     quality = np.array(f["TPF"]["QUALITY"])
+    my_quality = np.array(f["TPF"]["MY_QUALITY"])
     cx = f["header"]["cx"].value
     cy = f["header"]["cy"].value
     Tmag = f["header"]["Tmag"].value
-    return time, flux, quality, cx, cy, Tmag
+    return time, flux, quality, my_quality, cx, cy, Tmag
 
 def determine_area_thresh(Tmag):
     #Tmagによってapertureに使用するpixelに制限をかける
@@ -40,47 +34,6 @@ def determine_area_thresh(Tmag):
     area_len = max(area_len, 3)
     return area_len ** 2
 
-# def trim_aperture(img, sigma, mid_val, Q_std, area_thresh):
-#     #しきい値を決める
-#     thresh = mid_val + sigma * Q_std
-#     #しきい値以下のものを0、他を1にする
-#     thimg = np.where(img > thresh, 1, 0).astype(np.uint8)
-#     #特徴検出
-#     contours = cv2.findContours(thimg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[1]
-#     #領域が大きすぎるもの小さすぎるものは排除
-#     contours = [contour for contour in contours if 4 <= cv2.contourArea(contour) <= area_thresh]
-#     return contours
-#
-# def make_aperture(img, center, area_thresh=9):
-#     mid_val = np.nanmedian(img)
-#     img = np.nan_to_num(img)
-#     #統計量を求める。
-#     flat_img = np.ravel(img)
-#     Q1 = stats.scoreatpercentile(flat_img, 25)
-#     Q3 = stats.scoreatpercentile(flat_img, 75)
-#     Q_std = Q3 - Q1
-#     #星中心を算出
-#     center_tuple = tuple(np.round(center).astype(np.uint8))
-#     #3sigma以上の切り出し領域を求める
-#     contours = trim_aperture(img, 3, mid_val, Q_std, area_thresh)
-#     #4sigma以上の切り出し領域を求める
-#     contours.extend(trim_aperture(img, 4, mid_val, Q_std, area_thresh))
-#     for contour in contours:
-#         #中心が含まれているか確認
-#         test = cv2.pointPolygonTest(contour, center_tuple, False)
-#         if test >= 0:
-#             #apertureを作成
-#             aperture = np.zeros_like(img).astype(np.uint8)
-#             cv2.fillConvexPoly(aperture, points=contour, color=1)
-#             break
-#     #決めかねてしまう場合
-#     else:
-#         #中心含む4pixをapertureにする
-#         offset = np.array([[0.5, 0.5], [0.5, -0.5], [-0.5, 0.5], [-0.5, -0.5]])
-#         aperture_contour = np.round(center + offset).astype(np.int32)
-#         aperture = np.zeros_like(img).astype(np.uint8)
-#         cv2.fillConvexPoly(aperture, points=aperture_contour, color=1)
-#     return aperture
 
 def make_background(img, center, aperture, sigma=0.5, bg_thresh=30):
     mid_val = np.nanmedian(img)
@@ -135,7 +88,7 @@ def label_asteroid(flux, quality_arr, crit=4, kernel_size=51):
     quality_arr[~mask_asteroid] = quality_arr[~mask_asteroid] + 2
     return quality_arr
 
-def save(dstpath, fr, aperture, bkg_aperture, calibrated_flux, time, sap_flux, quality):
+def save(dstpath, fr, aperture, bkg_aperture, calibrated_flux, time, sap_flux, quality, my_quality):
     with h5py.File(dstpath, "w") as fw:
         #グループを作成
         fw_header = fw.create_group("header")
@@ -153,6 +106,7 @@ def save(dstpath, fr, aperture, bkg_aperture, calibrated_flux, time, sap_flux, q
         fw.create_dataset("LC/TIME", data=time)
         fw.create_dataset("LC/SAP_FLUX", data=sap_flux)
         fw.create_dataset("LC/QUALITY", data=quality)
+        fw.create_dataset("LC/MY_QUALITY", data=my_quality)
         fw.create_dataset("APERTURE_MASK/FLUX", data=aperture)
         fw.create_dataset("APERTURE_MASK/FLUX_BKG", data=bkg_aperture)
 
@@ -160,7 +114,7 @@ def main(data_type, sector, h5path):
     h5name = os.path.basename(h5path)
     with h5py.File(h5path, "r") as f:
         #データをロード
-        time, flux, quality, cx, cy, Tmag = load_data(f)
+        time, flux, quality, my_quality, cx, cy, Tmag = load_data(f)
         height, width = flux.shape[1:]
         if height == 13 and width == 13:
             #画像の時間積分の中央値を取得
@@ -180,13 +134,20 @@ def main(data_type, sector, h5path):
             aperture_frame = np.where(aperture == 1, calibrated_flux, 0)
             sap_flux = np.sum(aperture_frame, axis=(1, 2))
             #asteroid qualityを作成
-            quality = label_asteroid(flux, quality, crit=4, kernel_size=51)
+            my_quality = label_asteroid(flux, my_quality, crit=4, kernel_size=51)
             #出力
             dstpath = os.path.join(get_workdir(data_type, sector, 2), h5name)
-            save(dstpath, f, aperture, bkg_aperture, calibrated_flux, time, sap_flux, quality)
+            save(dstpath, f, aperture, bkg_aperture, calibrated_flux, time, sap_flux, quality, my_quality)
 
 if __name__ == "__main__":
-    for sector, camera, chip in product(p_work["sector"], p_work["camera"], p_work["chip"]):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--sector", required=True, type=int, nargs="*", help="sector number (required)(multiple allowed)")
+    parser.add_argument("--camera", type=int, nargs="*", default=[1, 2, 3, 4], help="camera number (multiple allowed); default=[1, 2, 3, 4]")
+    parser.add_argument("--chip", type=int, nargs="*", default=[1, 2, 3, 4], help="chip number (multiple allowed); default=[1, 2, 3, 4]")
+    parser.add_argument("-d", "--data_type", default="CTL", help="data type; default=\"CTL\"")
+    parser.add_argument("-j", "--jobs", type=int, default=30, help="number of cores; default=30")
+    args = parser.parse_args()
+    for sector, camera, chip in product(args.sector, args.camera, args.chip):
         #ファイルリストを取得
-        h5list = glob_h5(p_work["data_type"], sector, camera, chip, 1)
-        Parallel(n_jobs=p_work["jobs"])(delayed(main)(p_work["data_type"], sector, h5path) for h5path in tqdm(h5list))
+        h5list = glob_h5(args.data_type, sector, camera, chip, 1)
+        Parallel(n_jobs=args.jobs)(delayed(main)(args.data_type, sector, h5path) for h5path in tqdm(h5list))

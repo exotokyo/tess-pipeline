@@ -1,10 +1,11 @@
-#coding:utf-8
+#-*-coding:utf-8-*-
 import os
-import numpy as np
 import glob
+import MySQLdb
+import argparse
+import numpy as np
 from tqdm import tqdm
 from itertools import product
-import MySQLdb
 from joblib import Parallel, delayed
 
 from astropy.coordinates import SkyCoord
@@ -13,13 +14,6 @@ from astropy.wcs import WCS, NoConvergence
 from modules.io import glob_fits, load_wcs
 from modules.db import load_main_data, sql_data, check_main_table, check_chip_table, check_Tmag_range
 
-p_work = {
-    "data_type" : "CTL",
-       "sector" : [17],
-       "camera" : [1, 2, 3, 4],
-         "chip" : [1, 2, 3, 4],
-         "jobs" : 4,
-}
 
 def radec_minmax(wcs, bounds):
     edge_arr = np.array([[0, 0], [bounds[0] - 1, 0], [0, bounds[1] - 1], [bounds[0] - 1, bounds[1] - 1]])
@@ -65,9 +59,12 @@ def register(data_type, sector, camera, chip):
     cursor.close()
     conn.close()
 
-def main():
-    # result = load_main_data(p_work["data_type"])
-    Parallel(n_jobs=p_work["jobs"])([delayed(register)(p_work["data_type"], sector, camera, chips) for sector, camera, chips in product(p_work["sector"], p_work["camera"], p_work["chip"])])
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--sector", required=True, type=int, nargs="*", help="sector number (required)(multiple allowed)")
+    parser.add_argument("--camera", type=int, nargs="*", default=[1, 2, 3, 4], help="camera number (multiple allowed); default=[1, 2, 3, 4]")
+    parser.add_argument("--chip", type=int, nargs="*", default=[1, 2, 3, 4], help="chip number (multiple allowed); default=[1, 2, 3, 4]")
+    parser.add_argument("-d", "--data_type", default="CTL", help="data type; default=\"CTL\"")
+    parser.add_argument("-j", "--jobs", type=int, default=4, help="number of cores; default=4")
+    args = parser.parse_args()
+    Parallel(n_jobs=args.jobs)([delayed(register)(args.data_type, sector, camera, chips) for sector, camera, chips in product(args.sector, args.camera, args.chip)])

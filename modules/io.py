@@ -1,4 +1,4 @@
-#coding:utf-8
+#-*-coding:utf-8-*-
 import os
 import glob
 from astropy.io import fits

@@ -1,13 +1,14 @@
 #-*-coding:utf-8-*-
 import os
-import numpy as np
 import glob
 import h5py
 import MySQLdb
+import argparse
+import numpy as np
 from tqdm import tqdm
 from itertools import product
-from scipy.ndimage.morphology import binary_dilation
 from joblib import Parallel, delayed
+from scipy.ndimage.morphology import binary_dilation
 
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
@@ -19,13 +20,6 @@ from modules.aperture import determin_aperture
 from triage import fits2data, fits2pos, make_quality_flag, radec2pix, cut, make_quality_flag_positioning0
 from vinify import determine_area_thresh, make_background, label_asteroid
 
-p_work = {
-    "table_name" : "dipper",
-        "sector" : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-        "camera" : [1, 2, 3, 4],
-          "chip" : [1, 2, 3, 4],
-    "output_dir" : "/home/tajiri/dipper",
-}
 
 def extract_outer(wcs, bounds, dataset):
     result = []
@@ -44,11 +38,11 @@ def extract_outer(wcs, bounds, dataset):
     return result
 
 
-def tour():
+def tour(args):
     #データ抜き出し
-    dataset = load_guest_data(p_work["table_name"])
+    dataset = load_guest_data(args.table_name)
     #指定chipで切り出せる物があるか判断
-    for sector, camera, chip in product(p_work["sector"], p_work["camera"], p_work["chip"]):
+    for sector, camera, chip in product(args.sector, args.camera, args.chip):
         print("start job with sector=%s camera=%s chip=%s" % (sector, camera, chip))
         #fitslistを読み込み
         fitslist = glob_fits(sector, camera, chip)
@@ -96,7 +90,7 @@ def tour():
                 sap_flux = np.sum(aperture_frame, axis=(1, 2))
                 #asteroid qualityを作成
                 quality_arr = label_asteroid(flux, quality_arr, crit=4, kernel_size=51)
-                outputpath = os.path.join(p_work["output_dir"], "tess_%s_%s_%s_%s.h5" % (TID, sector, camera, chip))
+                outputpath = os.path.join(args.output_dir, "tess_%s_%s_%s_%s.h5" % (TID, sector, camera, chip))
                 with h5py.File(outputpath, "w") as f:
                     f.create_group("header")
                     f.create_group("TPF")
@@ -127,4 +121,11 @@ def tour():
         del FFIflux
 
 if __name__ == '__main__':
-    tour()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("table", help="table name for work")
+    parser.add_argument("output_dir", help="output directory")
+    parser.add_argument("-s", "--sector", type=int, nargs="*", default=[1, 2, 3], help="sector number (multiple allowed)", default=[1, 2, 3])
+    parser.add_argument("--camera", type=int, nargs="*", default=[1, 2, 3, 4], help="camera number (multiple allowed); default=[1, 2, 3, 4]")
+    parser.add_argument("--chip", type=int, nargs="*", default=[1, 2, 3, 4], help="chip number (multiple allowed); default=[1, 2, 3, 4]")
+    args = parser.parse_args()
+    tour(args)

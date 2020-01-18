@@ -118,3 +118,21 @@ CTLの全データ
 
 
 ## Quality Flag
+
+### TESS provided
+| 値 | 説明 |
+----|----|----
+| 1 | 姿勢の微調整中 |
+| 4 | 姿勢の乱れ |
+| 8 | 地球を向いている状態 |
+| 16 | Argabrightening event |
+| 32 | momentum dump |
+| 128 | 手動でつけられた異常点 |
+| 1024 | cosmic ray |
+| 2048 | 地球や月の散乱光の入射 |
+
+### My Flag
+| 値 | 説明 |
+----|----|----
+| 1 | positionが0 |
+| 2 | asteroid |

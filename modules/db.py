@@ -1,12 +1,7 @@
-#coding:utf-8
+#-*-coding:utf-8-*-
 import MySQLdb
 
-# sql_data = {
-#       "user" : "fisher",
-#     "passwd" : "atlantic",
-#       "host" : "133.11.231.118",
-#         "db" : "TESS"
-# }
+
 sql_data = {
       "user" : "fisher",
     "passwd" : "atlantic",
@@ -73,7 +68,6 @@ def load_chip_data(data_type, sector, camera, chip):
     table = check_chip_table(data_type)
     conn = MySQLdb.connect(**sql_data)
     cursor = conn.cursor()
-    # with MySQLdb.connect(**sql_data) as cursor:
     query = "select ID, ra, `dec`, Tmag from %s%s_%s_%s;" % (table, sector, camera, chip)
     cursor.execute(query)
     result = cursor.fetchall()
@@ -84,7 +78,6 @@ def load_chip_data(data_type, sector, camera, chip):
 def load_guest_data(table_name):
     conn = MySQLdb.connect(**sql_data)
     cursor = conn.cursor()
-    # with MySQLdb.connect(**sql_data) as cursor:
     query = "select ID, ra, `dec`, Tmag from %s;" % (table_name)
     cursor.execute(query)
     result = cursor.fetchall()

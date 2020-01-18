@@ -1,18 +1,16 @@
-#coding:utf-8
+#-*-coding:utf-8-*-
 import os
 import glob
-from astropy.io import fits
+import argparse
 import subprocess
 import numpy as np
 from tqdm import tqdm
 from joblib import Parallel, delayed
 
+from astropy.io import fits
+
 from modules.io import glob_fits
 
-p_work = {
-       "sector" : [17],
-         "jobs" : 25,
-}
 
 def search_incorrect(fitspath):
     #不正なfitsファイルがないか検索
@@ -28,9 +26,13 @@ def search_incorrect(fitspath):
 
 def main():
     #各セクターごとに不正なfitsファイルがないか調べる
-    for sector in p_work["sector"]:
+    for sector in args.sector:
         fitslist = glob_fits(sector, "?", "?")
-        Parallel(n_jobs=p_work["jobs"])(delayed(search_incorrect)(fitspath) for fitspath in tqdm(fitslist))
+        Parallel(n_jobs=args.jobs)(delayed(search_incorrect)(fitspath) for fitspath in tqdm(fitslist))
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--sector", required=True, type=int, nargs="*", help="sector number (required)(multiple allowed)")
+    parser.add_argument("-j", "--jobs", type=int, default=25, help="number of cores; default=25")
+    args = parser.parse_args()
     main()

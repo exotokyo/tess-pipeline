@@ -1,16 +1,14 @@
-#coding:utf-8
+#-*-coding:utf-8-*-
 import os
-from astropy.io import fits
+import argparse
 import subprocess
-from joblib import Parallel, delayed
 from itertools import product
+from joblib import Parallel, delayed
+
+from astropy.io import fits
 
 from modules.io import glob_fits, get_datadir
 
-p_work = {
-       "sector" : [17],
-         "jobs" : 25,
-}
 
 def check_lack(date, sector, camera, chip, yonmoji):
     tarname = "%s-s%04d-%s-%s-%s-s_ffic.fits" % (date, sector, camera, chip, yonmoji)
@@ -20,14 +18,18 @@ def check_lack(date, sector, camera, chip, yonmoji):
         cmd = "curl -C - -L -o %s https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:TESS/product/%s" % (tarpath, tarname)
         subprocess.run(cmd, shell=True)
 
-def main():
+def main(args):
     #各セクターごとに足りないFFIがないか検索
-    for sector in p_work["sector"]:
+    for sector in args.sector:
         fitslist = glob_fits(sector, "?", "?")
         datelist = list(set([os.path.basename(fitspath).split("-")[0] for fitspath in fitslist]))
         yonmoji = fitslist[0].split("-")[4]
-        Parallel(n_jobs=p_work["jobs"])(delayed(check_lack)(date, sector, camera, chip, yonmoji) for date, camera, chip in product(datelist, "1234", "1234"))
+        Parallel(n_jobs=args.jobs)(delayed(check_lack)(date, sector, camera, chip, yonmoji) for date, camera, chip in product(datelist, "1234", "1234"))
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--sector", required=True, type=int, nargs="*", help="sector number (required)(multiple allowed)")
+    parser.add_argument("-j", "--jobs", type=int, default=25, help="number of cores; default=25")
+    args = parser.parse_args()
+    main(args)

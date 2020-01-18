@@ -1,13 +1,14 @@
 #-*-coding:utf-8-*-
 import os
-import numpy as np
 import glob
 import h5py
 import MySQLdb
+import argparse
+import numpy as np
 from tqdm import tqdm
 from itertools import product
-from scipy.ndimage.morphology import binary_dilation
 from joblib import Parallel, delayed
+from scipy.ndimage.morphology import binary_dilation
 
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
@@ -16,13 +17,6 @@ from astropy.wcs import WCS, WCSSUB_LONGITUDE, WCSSUB_LATITUDE, WCSSUB_CELESTIAL
 from modules.db import load_chip_data
 from modules.io import load_wcs, glob_fits, get_target_path
 
-
-p_work = {
-    "data_type" : "CTL",
-       "sector" : [17],
-       "camera" : [1, 2, 3, 4],
-         "chip" : [1, 2, 3, 4],
-}
 
 def fits2data(fitslist):
     """
@@ -107,13 +101,18 @@ def make_quality_flag(sector):
     quality_arr = binary_dilation(quality_arr).astype(np.int32)
     return quality_arr
 
-def make_quality_flag_positioning0(quality_arr, x_pos, y_pos):
+def load_quality_flag(sector, camera, chip):
+    fitslist = glob_fits(sector, camera, chip)
+    quality_arr = np.array([fits.open(fitspath)[1].header["DQUALITY"] for fitspath in tqdm(fitslist)]).astype(np.int32)
+    return quality_arr
+
+def make_quality_flag_positioning0(x_pos, y_pos):
     #positioning0になっているもののqualityを0
     x_pos_0 = np.where(x_pos == 0, 1, 0)
     y_pos_0 = np.where(y_pos == 0, 1, 0)
     pos_0 = np.logical_or(x_pos_0, y_pos_0)
-    quality_arr += pos_0.astype(np.int32) * 4
-    return quality_arr
+    my_quality_arr = pos_0.astype(np.int32)
+    return my_quality_arr
 
 def radec2pix(ra, dec, wcs):
     coord = SkyCoord(ra, dec, unit="deg")
@@ -130,7 +129,7 @@ def cut(x, y, FFIflux, size=(13, 13)):
     cy = height + y - y_int
     return flux, cx, cy
 
-def save(data_type, TID, sector, camera, chip, ra, dec, Tmag, x, y, cx, cy, wcs, bounds, time, flux, x_pos, y_pos, quality_arr):
+def save(data_type, TID, sector, camera, chip, ra, dec, Tmag, x, y, cx, cy, wcs, bounds, time, flux, x_pos, y_pos, quality_arr, my_quality_arr):
     tpfpath = get_target_path(data_type, TID, sector, camera, chip, 1)
     with h5py.File(tpfpath, "w") as f:
         f.create_group("header")
@@ -146,13 +145,13 @@ def save(data_type, TID, sector, camera, chip, ra, dec, Tmag, x, y, cx, cy, wcs,
         f.create_dataset("header/y", data=y)
         f.create_dataset("header/cx", data=cx)
         f.create_dataset("header/cy", data=cy)
-        # f.create_dataset("header/wcs", data=wcs)
-        # f.create_dataset("header/bounds", data=bounds)
         f.create_dataset("TPF/TIME", data=time)
         f.create_dataset("TPF/ROW_CNTS", data=flux)
         f.create_dataset("TPF/X_POS", data=x_pos)
         f.create_dataset("TPF/Y_POS", data=y_pos)
         f.create_dataset("TPF/QUALITY", data=quality_arr)
+        f.create_dataset("TPF/MY_QUALITY", data=my_quality_arr)
+
 
 def triage(data_type, sector, camera, chip):
     #ID, ra, dec, Tmagデータを読み込み
@@ -166,9 +165,10 @@ def triage(data_type, sector, camera, chip):
     #wcsを取得
     wcs, bounds = load_wcs(fitslist)
     #qualityフラグを作成
-    quality_arr = make_quality_flag(sector)
+    # quality_arr = make_quality_flag(sector)
+    quality_arr = load_quality_flag(sector, camera, chip)
     #positioning0の点のqualityフラグを作成
-    quality_arr = make_quality_flag_positioning0(quality_arr, x_pos, y_pos)
+    my_quality_arr = make_quality_flag_positioning0(x_pos, y_pos)
     #各天体ごとにhdfファイルを作成
     print("making h5file...")
     for TID, ra, dec, Tmag in tqdm(data):
@@ -177,9 +177,15 @@ def triage(data_type, sector, camera, chip):
         #pixel情報からFFIを切り出し
         flux, cx, cy = cut(x, y, FFIflux)
         #出力
-        save(data_type, TID, sector, camera, chip, ra, dec, Tmag, x, y, cx, cy, wcs, bounds, time, flux, x_pos, y_pos, quality_arr)
+        save(data_type, TID, sector, camera, chip, ra, dec, Tmag, x, y, cx, cy, wcs, bounds, time, flux, x_pos, y_pos, quality_arr, my_quality_arr)
     del FFIflux
 
 if __name__ == "__main__":
-    for sector, camera, chip in product(p_work["sector"], p_work["camera"], p_work["chip"]):
-        triage(p_work["data_type"], sector, camera, chip)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--sector", required=True, type=int, nargs="*", help="sector number (required)(multiple allowed)")
+    parser.add_argument("--camera", type=int, nargs="*", default=[1, 2, 3, 4], help="camera number (multiple allowed); default=[1, 2, 3, 4]")
+    parser.add_argument("--chip", type=int, nargs="*", default=[1, 2, 3, 4], help="chip number (multiple allowed); default=[1, 2, 3, 4]")
+    parser.add_argument("-d", "--data_type", default="CTL", help="data type; default=\"CTL\"")
+    args = parser.parse_args()
+    for sector, camera, chip in product(args.sector, args.camera, args.chip):
+        triage(args.data_type, sector, camera, chip)
