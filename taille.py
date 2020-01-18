@@ -5,8 +5,6 @@ import subprocess
 from itertools import product
 from joblib import Parallel, delayed
 
-from astropy.io import fits
-
 from modules.io import glob_fits, get_datadir
 
 
@@ -14,12 +12,14 @@ def check_lack(date, sector, camera, chip, yonmoji):
     tarname = "%s-s%04d-%s-%s-%s-s_ffic.fits" % (date, sector, camera, chip, yonmoji)
     tarpath = os.path.join(get_datadir(sector), tarname)
     #もしあるべきはずのfitsファイルがない場合、再度ダウンロード
+    # If there is no fits file that should be, download it again
     if not os.path.exists(tarpath):
         cmd = "curl -C - -L -o %s https://mast.stsci.edu/api/v0.1/Download/file/?uri=mast:TESS/product/%s" % (tarpath, tarname)
         subprocess.run(cmd, shell=True)
 
 def main(args):
     #各セクターごとに足りないFFIがないか検索
+    # Search for lack of FFI files for each sector
     for sector in args.sector:
         fitslist = glob_fits(sector, "?", "?")
         datelist = list(set([os.path.basename(fitspath).split("-")[0] for fitspath in fitslist]))

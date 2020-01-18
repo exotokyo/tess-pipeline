@@ -1,6 +1,5 @@
 #-*-coding:utf-8-*-
 import os
-import glob
 import MySQLdb
 import argparse
 import numpy as np
@@ -25,36 +24,47 @@ def radec_minmax(wcs, bounds):
 def register(data_type, sector, camera, chip):
     """
     各チップごとの天体のデータベースを作成
+    Create chip table which is the database of sources including a full frame image chip
     """
     fitslist = glob_fits(sector, camera, chip, sort=False)
     wcs, bounds = load_wcs(fitslist)
-    #radecの上限下限を決めて抽出数を少なくする
+    # radecの上限下限を決めて抽出数を少なくする
+    # extract the sources by its sky position (ra, dec)
     ra_max, dec_max, ra_min, dec_min = radec_minmax(wcs, bounds)
-    #data_typeによってパラメータ調整
+    # data_typeによってパラメータ調整
+    # adjust parameters by data_type
     base_table = check_main_table(data_type)
     chip_table = check_chip_table(data_type)
     Tmag_max, Tmag_min = check_Tmag_range(data_type)
-    #接続
+    # 接続
+    # connect
     conn = MySQLdb.connect(**sql_data)
     cursor = conn.cursor()
     #データを抽出
+    # extract sources
     query = "SELECT ID, ra, `dec` from %s where ra < %s and ra > %s and `dec` < %s and `dec` > %s and Tmag < %s and Tmag > %s;" % (base_table, ra_max, ra_min, dec_max, dec_min, Tmag_max, Tmag_min)
     cursor.execute(query)
     dataset = cursor.fetchall()
     #抽出された天体が本当にfits画像中に存在するか確認
+    # Check whether the extracted source really exists in the fits image
     for ID, ra, dec in tqdm(dataset):
         #座標を取得
+        # get the sky coordinate
         coord = SkyCoord(ra, dec, unit="deg")
         #pixelに変換
+        # convert the sky coordinate into the pixel coordinate
         try:
             px, py = coord.to_pixel(wcs)
+        # if the sky position cannot be converted, skip
         except NoConvergence:
             continue
         #もしそのchip内の画像に含まれていたら登録
+        # if the source exists in the fits image, register it with the chip table
         if (px < bounds[0]) and (px > 0) and (py < bounds[1]) and (py > 0):
             query = "INSERT INTO %s%s_%s_%s SELECT * FROM %s_has_key WHERE ID=%s" % (chip_table, sector, camera, chip, base_table, ID)
             cursor.execute(query)
     #commitして切断
+    # commit and close
     conn.commit()
     cursor.close()
     conn.close()

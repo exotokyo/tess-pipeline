@@ -21,15 +21,16 @@ from modules.io import load_wcs, glob_fits, get_target_path
 def fits2data(fitslist):
     """
     fitsファイルから時間,fluxを読み込み
+    read time and flux from fits file
     """
     t_list = []
     f_list = []
     print("loading fits file...")
     for i, fitspath in enumerate(tqdm(fitslist)):
         with fits.open(fitspath) as hdu:
-            #時間
+            # time
             time_arr = hdu[1].header["TSTART"]
-            #flux
+            # flux
             flux_arr = np.array(hdu[1].data)
             t_list.append(time_arr)
             f_list.append(flux_arr)
@@ -42,16 +43,19 @@ def fits2data(fitslist):
 def fits2pos(fitslist):
     """
     fitsファイルから位置を読み込み
+    read position from fits file
     """
     x_center = np.array([])
     y_center = np.array([])
     for fitspath in tqdm(fitslist):
         #x, y座標を格納
+        # store x-y coordinate
         with fits.open(fitspath) as hdu:
             try:
                 x = hdu[1].header["CRVAL1"]
                 y = hdu[1].header["CRVAL2"]
             #何故かかけている時があるのでそういう場合は削除
+            # When header is broken, substitute 0 for x and y
             except:
                 x = y = 0.
             x_center = np.hstack((x_center, x))
@@ -59,12 +63,13 @@ def fits2pos(fitslist):
     return x_center, y_center
 
 def pos2quality(x_center, y_center, sigma):
-    #統計値を算出
+    # 統計値を算出
+    # calculate statistics
     x_mean = np.nanmean(x_center)
     y_mean = np.nanmean(y_center)
     x_std = np.nanstd(x_center)
     y_std = np.nanstd(y_center)
-    #sigma以上離れている点を1とする
+    # sigma以上離れている点を1とする
     x_cond = np.logical_or(x_center > x_mean + sigma * x_std, x_center < x_mean - sigma * x_std)
     y_cond = np.logical_or(y_center > y_mean + sigma * y_std, y_center < y_mean - sigma * y_std)
     quality = np.logical_or(x_cond, y_cond)
@@ -102,12 +107,14 @@ def make_quality_flag(sector):
     return quality_arr
 
 def load_quality_flag(sector, camera, chip):
+    # load quality flag from fits file
     fitslist = glob_fits(sector, camera, chip)
     quality_arr = np.array([fits.open(fitspath)[1].header["DQUALITY"] for fitspath in tqdm(fitslist)]).astype(np.int32)
     return quality_arr
 
 def make_quality_flag_positioning0(x_pos, y_pos):
-    #positioning0になっているもののqualityを0
+    #positioning0になっているもののqualityを1にする
+    # set quality to 1 for position is 0
     x_pos_0 = np.where(x_pos == 0, 1, 0)
     y_pos_0 = np.where(y_pos == 0, 1, 0)
     pos_0 = np.logical_or(x_pos_0, y_pos_0)
@@ -155,28 +162,38 @@ def save(data_type, TID, sector, camera, chip, ra, dec, Tmag, x, y, cx, cy, wcs,
 
 def triage(data_type, sector, camera, chip):
     #ID, ra, dec, Tmagデータを読み込み
+    # read ID, ra, dec, Tmag data
     data = load_chip_data(data_type, sector, camera, chip)
     #fitsファイルのリストを取得
+    # get a list of fits file
     fitslist = glob_fits(sector, camera, chip)
     #fitsファイルからtime, fluxを取得
+    # get time and flux data from fits files
     time, FFIflux = fits2data(fitslist)
     #fitsファイルから位置を取得
+    # get position from fits file
     x_pos, y_pos = fits2pos(fitslist)
     #wcsを取得
+    # get WCS data from fits file
     wcs, bounds = load_wcs(fitslist)
     #qualityフラグを作成
+    # read quality flag from fits file
     # quality_arr = make_quality_flag(sector)
     quality_arr = load_quality_flag(sector, camera, chip)
-    #positioning0の点のqualityフラグを作成
+    # create original quality flag
     my_quality_arr = make_quality_flag_positioning0(x_pos, y_pos)
     #各天体ごとにhdfファイルを作成
+    # create a hdf file for each source
     print("making h5file...")
     for TID, ra, dec, Tmag in tqdm(data):
         #ra, decからpixelを抽出
+        # calculate the pixel coordinate from the sky position
         x, y = radec2pix(ra, dec, wcs)
         #pixel情報からFFIを切り出し
+        # cut out a target pixel from a full frame image
         flux, cx, cy = cut(x, y, FFIflux)
         #出力
+        # save data
         save(data_type, TID, sector, camera, chip, ra, dec, Tmag, x, y, cx, cy, wcs, bounds, time, flux, x_pos, y_pos, quality_arr, my_quality_arr)
     del FFIflux
 

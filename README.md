@@ -1,118 +1,122 @@
 # Vineyard
-美味しいワインはぶどうから
+A great wine is made from greate grapes.
 
-ぶどうの栽培から収穫、そして醸造すべての工程をきちんと洗練させて美味しいワインを作りましょう
+Let's make a great wine by sophisticating the all process from cultivation to vinification.
 
+# Anuall schedule of winery
 
+## plant (植樹)
+Download full frame images from MAST using `plant.py`.
 
-# ブドウ農家の一年
+You should specify what sector you download by `-s`.
+
+If you want to download full frame images from sector 1 to sector 3, then you type the command as follows.
+
+`python plant.py -s 1 2 3`
+
 
 ## taille (冬季剪定)
-最初のダウンロードは
+File download may fail when network troubles occur.
 
-ソース内にSectorを指定する場所があるので書き換えて、
+Use `taille.py` to find out which files were not downloaded and download them again.
 
-`python opening.py`
+For example,
 
-次に欠けているfitsファイルを探して、再ダウンロードします
+`python taille.py -s 1 2 3`
 
-ソース内にSectorを指定する場所があるので書き換えて、
-
-`python taille.py`
-
-もしディレクトリがいっぱいになったらmodules/io.pyのなかを適宜書き換え。
 
 ## rognage (夏季剪定)
-データが破損しているfitsファイルを探して、再ダウンロードします
+Sometimes downloaded file is broken if network trouble occurs.
 
-ソース内にSectorを指定する場所があるので書き換えて、
+Use `rognage.py` to find out which files were broken and download them again.
 
-`python rognage.py`
+For example,
+
+`python rognage.py -s 1 2 3`
+
 
 ## vendange (収穫)
+Create chip tables in MySQL database.
 
-これだけOctopus内の作業なので一回でよい。
-各chipに含まれている天体を探し出して一つのテーブルに格納します
+You should specify what sector you create chip tables by `-s`.
 
-### 新しいセクターがリリースされたときの手順
+If you want to create chip tables from sector 1 to sector 3, then you type the command as follows.
 
-1.  新セクターの各chipのテーブルを作成する 例はSector 17
+`python vendange.py -s 1 2 3`
 
-Octopusに入る
-
-`mysql -h 133.11.229.168 -u fisher -p`
-
-`create table CTLchip17_1_1 like CTLchip1_1_1`
-
-`create table CTLchip17_1_2 like CTLchip1_1_1`
-
-`create table CTLchip17_1_3 like CTLchip1_1_1`
-
-のように各Camera, Chipに対応するものをつくる。
-
-2. vandange.pyを実行
-
-ソース内にSectorを指定する場所があるので書き換えて、
-
-`python vandange.py`
-
-を実行すると、先ほど作成したtableが埋まっていく
 
 ## triage (選果)
-各天体ごとにtarget pixelを切り出します
+Cut out target pixels from full frame images.
 
-ソース内にSectorを指定する場所があるので書き換えて、
+You should specify what sector you cut out target pixels by `-s`.
 
-`python triage.py`
+If you want to cut out target pixels from sector 1 to sector 3, then you type the command as follows.
+
+
+`python triage.py -s 1 2 3`
+
 
 ## vinify (醸造)
-各target pixelごとにlight curveを生成します
+Create light curves from target pixels
 
-ソース内にSectorを指定する場所があるので書き換えて、
+You should specify what sector you create light curves by `-s`.
 
-`python vinify.py`
+If you want to create light curves from sector 1 to sector 3, then you type the command as follows.
 
-# Domaine
-データベースのテーブル類の紹介
+`python vinify.py -s 1 2 3`
 
-## TICv7s
-dec<0のTIC全データ
 
-## TICv7n
-dec>0のTIC全データ
 
-## CTLv7
-CTLの全データ
+
+
+# Wine Catalog
+Introduce tables in the database.
+
+
+## CTLv8
+All data listed in Candidate Target List version 8.
+
+## CTLv8\_has\_key
+All data listed in Candidate Target List version 8.
+
+TIC ID is set as a primary key.
+
+## TICv8\_{dec_min}\_{dec_max}
+All TESS Input Catalog sources whose declination is between `dec_min` and `dec_max`.
+
+## TICv8\_{dec_min}\_{dec_max}\_has\_key
+All TESS Input Catalog sources whose declination is between `dec_min` and `dec_max`.
+
+TIC ID is set as a primary key.
 
 ## CTLchip{sector}\_{camera}\_{chip}
-各chipに含まれているCTLのデータ
+The chip table which contains all sources existing in one full frame image.
 
-## TICchip{sector}\_{camera}\_{chip}
-各chipに含まれているTICのデータ
+This tables is filled by vendange process.
+
+
 
 # Cave
-出力データの紹介
+Introduce output data
 
-## ディレクトリ
+## Direcory
 
-## ファイル中身
+## hdf file
 
 ### header
-| name | 説明 |
+| name | explanation |
 ----|----
-| TID | その天体のTID |
-| sector | 観測セクター |
-| camera | 観測カメラ |
-| chip | 観測CCD |
-| ra | その天体のright ascention |
-| dec | その天体のdeclination |
-| Tmag | その天体のTESSでの等級 |
-| x | FFI画像中での天体の位置x |
-| y | FFI画像中での天体の位置y |
-| cx | target pixel画像中での天体の位置x |
-| cy | target pixel画像中での天体の位置x |
-| wcs | WCS |
-| bounds | FFI画像のpixel数 |
+| TID | TIC ID |
+| sector | The sector during which the source was observed |
+| camera | The Camera number which observes the source |
+| chip | The CCD number which observes the source |
+| ra | The right ascention of the source (deg) |
+| dec | The declination of the source (deg) |
+| Tmag | The TESS magnitude of the source |
+| x | The x coordinate of the source in the full frame image |
+| y | The y coordinate of the source in the full frame image |
+| cx | The x coordinate of the source in the target pixel |
+| cy | The y coordinate of the source in the target pixel |
 
 ### TPF
 
@@ -120,19 +124,23 @@ CTLの全データ
 ## Quality Flag
 
 ### TESS provided
-| 値 | 説明 |
-----|----|----
-| 1 | 姿勢の微調整中 |
-| 4 | 姿勢の乱れ |
-| 8 | 地球を向いている状態 |
-| 16 | Argabrightening event |
-| 32 | momentum dump |
-| 128 | 手動でつけられた異常点 |
-| 1024 | cosmic ray |
-| 2048 | 地球や月の散乱光の入射 |
 
-### My Flag
-| 値 | 説明 |
-----|----|----
-| 1 | positionが0 |
+https://outerspace.stsci.edu/display/TESS/2.0+-+Data+Product+Overview
+
+
+| value | explanation |
+----|----
+| 1 | Attitude tweak |
+| 4 | Spacecraft is in coarse point |
+| 8 | Spacecraft is in Earth point |
+| 16 | Argabrightening event |
+| 32 | Reaction wheel desaturation event |
+| 128 | Manual exclude due to an anomaly |
+| 1024 | Cosmic ray detected on collateral pixel row or column |
+| 2048 | Stray light from Earth to Moon in camera FOV |
+
+### My Quality Flag
+| value | explanation |
+----|----
+| 1 | position is 0 |
 | 2 | asteroid |
