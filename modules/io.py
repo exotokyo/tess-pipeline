@@ -84,3 +84,13 @@ def get_target_path(data_type, TID, sector, camera, chip, step):
     tpfname = "tess_%s_%s_%s_%s.h5" % (TID, sector, camera, chip)
     tpfpath = os.path.join(outputdir, tpfname)
     return tpfpath
+
+def get_gbkg_path(data_type, TID, sector, camera, chip, step):
+    """
+    gbkg.h5を出力するディレクトリパスを出力
+    get absolute path of a output file
+    """
+    outputdir="/eel/gbkg"
+    gbkgname = "tess_%s_%s_%s_%s_gbkg.h5" % (TID, sector, camera, chip)
+    gbkgpath = os.path.join(outputdir, gbkgname)
+    return gbkgpath
