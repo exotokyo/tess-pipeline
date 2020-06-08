@@ -37,8 +37,10 @@ def get_workdir(data_type, sector, step):
         dir_name = "TIC%s" % step
     if sector <= 10:
         workdir_root = workdir_org % "manta"
-    else:
+    elif sector <= 18:
         workdir_root = workdir_org % "stingray"
+    else:
+        workdir_root = workdir_org % "pike"
     workdir = os.path.join(workdir_root, dir_name)
     return workdir
 
