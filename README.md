@@ -3,7 +3,7 @@ A great wine is made from greate grapes.
 
 Let's make a great wine by sophisticating the all process from cultivation to vinification.
 
-# Anuall schedule of winery
+# Annual schedule of a winery
 
 ## plant (植樹)
 Download full frame images from MAST using `plant.py`.
@@ -65,8 +65,11 @@ If you want to create light curves from sector 1 to sector 3, then you type the 
 
 `python vinify.py -s 1 2 3`
 
+# Other odd jobs
 
+## generate a list of h5 files
 
+`python update_product.py`
 
 
 # Wine Catalog
