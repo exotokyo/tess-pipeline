@@ -23,8 +23,10 @@ def get_datadir(sector, filetype="ffic"):
     if filetype == "ffic":
         if sector <= 11:
             datadir = datadir_org % "shishamo1"
-        else:
+        elif sector <= 21:
             datadir = datadir_org % "shishamo2"
+        else:
+            datadir = datadir_org % "shishamo3"
     return datadir
 
 def get_workdir(data_type, sector, step):
